@@ -1,0 +1,13 @@
+# OPA pulls the skills (allowed_tools + lifecycle) from the registry as a bundle and serves decisions.
+services:
+  registry:
+    url: ${REGISTRY_URL}
+bundles:
+  beast:
+    service: registry
+    resource: /bundles/beast.tar.gz
+    polling:
+      min_delay_seconds: 5
+      max_delay_seconds: 15
+decision_logs:
+  console: true

@@ -1,0 +1,26 @@
+# TLS terminates here with a cert-manager certificate; APIM in front is the only client allowed through.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: mcp-tls}
+spec:
+  secretName: mcp-tls
+  dnsNames: [mcp.scarletbeast.com]
+  issuerRef: {name: letsencrypt, kind: ClusterIssuer}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp
+  annotations:
+    nginx.ingress.kubernetes.io/whitelist-source-range: "0.0.0.0/32"   # overlays set APIM's outbound IPs
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2                   # /agile/mcp -> /mcp on agile-mcp
+spec:
+  ingressClassName: nginx
+  tls: [{hosts: [mcp.scarletbeast.com], secretName: mcp-tls}]
+  rules:
+    - host: mcp.scarletbeast.com
+      http:
+        paths:
+          - {path: /agile(/|$)(.*), pathType: ImplementationSpecific, backend: {service: {name: agile-mcp, port: {name: http}}}}
+          - {path: /college(/|$)(.*), pathType: ImplementationSpecific, backend: {service: {name: college-mcp, port: {name: http}}}}

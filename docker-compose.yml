@@ -1,0 +1,67 @@
+# Local Beast Assist: everything but Azure. `make up`, then `make seed` and `make evals`.
+name: beast-assist
+
+x-svc: &svc
+  build: .
+  image: beast-assist:dev
+  restart: unless-stopped
+  env_file: [.env]
+  environment: &env
+    BEAST_ENV: dev
+    AUTH_ISSUER: http://localhost:8400/beast-dev-tenant/v2.0
+    AUTH_JWKS_URL: http://mock-entra:8000/beast-dev-tenant/discovery/v2.0/keys
+    AUTH_AUDIENCE: api://beast-assist
+    OPA_URL: http://opa:8181
+    RAG_DSN: postgresql://beast:beast@postgres:5432/beast
+    REGISTRY_DSN: postgresql://beast:beast@postgres:5432/beast
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+  extra_hosts:
+    # the Scarlet Beast backends live on this host; keep their TLS names, reach them locally
+    - living.scarletbeast.com:host-gateway
+    - college.scarletbeast.com:host-gateway
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment: {POSTGRES_USER: beast, POSTGRES_PASSWORD: beast, POSTGRES_DB: beast}
+    ports: ["127.0.0.1:55432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: {test: ["CMD", "pg_isready", "-U", "beast"], interval: 5s, retries: 20}
+
+  mock-entra:
+    <<: *svc
+    environment: {SERVICE: mock-entra, MOCK_BASE: "http://localhost:8400", AUTH_AUDIENCE: "api://beast-assist"}
+    ports: ["127.0.0.1:8400:8000"]
+
+  registry:
+    <<: *svc
+    environment: {<<: *env, SERVICE: registry}
+    ports: ["127.0.0.1:8410:8000"]
+    depends_on: {postgres: {condition: service_healthy}, mock-entra: {condition: service_started}}
+
+  opa:
+    image: openpolicyagent/opa:1.4.2
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "--config-file=/cfg/config.yaml", "/policy/tools.rego"]
+    environment: {REGISTRY_URL: "http://registry:8000"}
+    volumes: ["./deploy/opa:/cfg:ro", "./policy:/policy:ro"]
+    ports: ["127.0.0.1:18181:8181"]
+    depends_on: [registry]
+
+  agile-mcp:
+    <<: *svc
+    environment: {<<: *env, SERVICE: agile-mcp}
+    ports: ["127.0.0.1:8421:8000"]
+    depends_on: [opa, mock-entra]
+
+  college-mcp:
+    <<: *svc
+    environment: {<<: *env, SERVICE: college-mcp}
+    ports: ["127.0.0.1:8422:8000"]
+    depends_on: {opa: {condition: service_started}, postgres: {condition: service_healthy}}
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    ports: ["127.0.0.1:16686:16686"]
+
+volumes:
+  pgdata:

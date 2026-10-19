@@ -1,0 +1,28 @@
+- name: courses include the MCP course
+  skill: college-tutor
+  server: college-mcp
+  tool: list_courses
+  expect: {type: list, contains: "MCP Tool & Skill Developer"}
+- name: semantic search finds FastAPI material in the MCP course
+  skill: college-tutor
+  server: college-mcp
+  tool: search_lessons
+  args: {query: "override a FastAPI dependency in a pytest test", course: mcp, k: 3}
+  expect: {type: list, min_items: 1, item_keys: [lesson_id, score, passage], first_score_at_least: 0.55}
+- name: search is scoped to the course asked for
+  skill: college-tutor
+  server: college-mcp
+  tool: search_lessons
+  args: {query: "limit orders", course: trading, k: 3}
+  expect: {all_items: {course: trading}}
+- name: malformed lesson id is rejected
+  skill: college-tutor
+  server: college-mcp
+  tool: get_lesson
+  args: {lesson_id: "../../etc/passwd"}
+  expect: {error_contains: invalid_input}
+- name: tutor cannot reach the agile board
+  skill: college-tutor
+  server: agile-mcp
+  tool: list_tasks
+  expect: {error_contains: "not in the allowed_tools"}

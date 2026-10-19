@@ -1,0 +1,15 @@
+# kind / minikube: one replica, the dev issuer instead of Entra, local image.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: [../../base, mock-entra.yaml]
+images:
+  - {name: ghcr.io/christianscarlet2/beast-assist, newName: beast-assist, newTag: dev}
+patches:
+  - target: {kind: Deployment, name: "agile-mcp|college-mcp|skills-registry"}
+    patch: |-
+      - {op: replace, path: /spec/replicas, value: 1}
+  - target: {kind: ConfigMap, name: beast-config}
+    patch: |-
+      - {op: replace, path: /data/BEAST_ENV, value: dev}
+      - {op: add, path: /data/AUTH_ISSUER, value: "http://localhost:8400/beast-dev-tenant/v2.0"}
+      - {op: add, path: /data/AUTH_JWKS_URL, value: "http://mock-entra/beast-dev-tenant/discovery/v2.0/keys"}

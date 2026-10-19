@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: skills-registry, labels: {app: skills-registry}}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: skills-registry}}
+  template:
+    metadata: {labels: {app: skills-registry}}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: registry
+          image: beast-assist
+          env: [{name: SERVICE, value: registry}]
+          envFrom: [{configMapRef: {name: beast-config}}, {secretRef: {name: beast-secrets}}]
+          ports: [{name: http, containerPort: 8000}]
+          readinessProbe: {httpGet: {path: /readyz, port: http}, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 20}
+          resources: {requests: {cpu: 50m, memory: 256Mi}, limits: {memory: 768Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: skills-registry}
+spec:
+  selector: {app: skills-registry}
+  ports: [{name: http, port: 80, targetPort: http}]

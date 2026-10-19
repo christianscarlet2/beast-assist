@@ -1,0 +1,47 @@
+# Tool benchmarks against the live agile board. Read-only: the eval token has Tools.Read only.
+- name: guide answers
+  skill: board-standup
+  server: agile-mcp
+  tool: bootstrap_guide
+  expect: {keys: [server, statuses, start_with]}
+- name: standup lists open work
+  skill: board-standup
+  server: agile-mcp
+  tool: list_tasks
+  args: {project: SB, status: "todo,in_progress"}
+  expect: {type: list, item_keys: [key, title, status]}
+- name: unknown task is a clean not_found
+  skill: board-standup
+  server: agile-mcp
+  tool: get_task
+  args: {key: SB-999999}
+  expect: {error_contains: not_found}
+- name: bad key is rejected before the backend
+  skill: board-standup
+  server: agile-mcp
+  tool: get_task
+  args: {key: "not a key"}
+  expect: {error_contains: invalid_input}
+# --- scope: the policy must refuse these
+- name: standup skill cannot create tasks
+  skill: board-standup
+  server: agile-mcp
+  tool: create_task
+  args: {title: should never exist}
+  expect: {error_contains: "not in the allowed_tools"}
+- name: write tool refused without Tools.Write even when the skill allows it
+  skill: study-plan-from-job
+  server: agile-mcp
+  tool: create_task
+  args: {title: should never exist}
+  expect: {error_contains: "token lacks Tools.Write"}
+- name: no skill header, no access
+  skill: ""
+  server: agile-mcp
+  tool: list_tasks
+  expect: {error_contains: "X-Skill-Id"}
+- name: tools/list shows only the skill's tools
+  skill: board-standup
+  server: agile-mcp
+  list_tools: true
+  expect: {exactly: [bootstrap_guide, list_tasks, get_task]}

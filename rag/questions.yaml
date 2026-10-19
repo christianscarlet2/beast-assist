@@ -1,0 +1,18 @@
+# Retrieval test set: each question should find a passage from this course (and lesson, when given).
+- question: How do I write a FastAPI dependency and override it in tests?
+  course: mcp
+- question: Test the 404 and 422 paths of an API with pytest TestClient
+  course: mcp
+  title_contains: FastAPI
+- question: What is the difference between a market order and a limit order?
+  course: trading
+- question: How do I protect myself from gaslighting?
+  course: machiavelli
+- question: What are the planets, signs and houses in a natal chart?
+  course: astrology
+- question: How should I practise a safe backward fall at home?
+  course: aikido
+- question: What does a neural network learn from examples?
+  course: ai
+- question: Explain the bid ask spread
+  course: trading

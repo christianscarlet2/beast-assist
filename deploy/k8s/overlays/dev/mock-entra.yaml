@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mock-entra, labels: {app: mock-entra}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: mock-entra}}
+  template:
+    metadata: {labels: {app: mock-entra}}
+    spec:
+      containers:
+        - name: mock-entra
+          image: beast-assist
+          env:
+            - {name: SERVICE, value: mock-entra}
+            - {name: MOCK_BASE, value: "http://localhost:8400"}
+          ports: [{name: http, containerPort: 8000}]
+          readinessProbe: {httpGet: {path: /healthz, port: http}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mock-entra}
+spec:
+  selector: {app: mock-entra}
+  ports: [{name: http, port: 80, targetPort: http}]
