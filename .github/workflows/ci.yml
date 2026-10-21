@@ -43,7 +43,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.12", cache: pip}
       - run: pip install -e ".[dev]"
-      - name: Stack up (no Scarlet Beast backends in CI: tool evals that need them are skipped)
+      - name: "Stack up (no Scarlet Beast backends in CI: tool evals that need them are skipped)"
         run: |
           cp .env.example .env
           docker compose up -d --build postgres mock-entra registry opa
