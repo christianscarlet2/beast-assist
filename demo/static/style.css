@@ -134,7 +134,7 @@ td:first-child { color: #c6cedc; width: 36%; }
 .btn:hover { filter: brightness(1.08); }
 .sow { overflow-x: clip; }
 .sow-viewer { position: relative; outline: none; padding: 30px 44px 0 0; }
-.sheets { position: relative; aspect-ratio: 8.5 / 11; perspective: 1600px; }
+.sheets { position: relative; aspect-ratio: 8.5 / 11; perspective: 1600px; container-type: inline-size; }
 .sheet { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #fff; border-radius: 4px;
   box-shadow: 0 30px 60px -20px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.06);
   transition: transform .55s cubic-bezier(.2,.7,.2,1), opacity .45s, filter .45s; transform-origin: 50% 100%; cursor: zoom-in; }
@@ -143,6 +143,15 @@ td:first-child { color: #c6cedc; width: 36%; }
 .sheet.next2 { z-index: 2; transform: translate(26px, -18px) rotate(4deg) scale(.97); filter: brightness(.66); }
 .sheet.next3 { z-index: 1; transform: translate(36px, -24px) rotate(5.6deg) scale(.955); filter: brightness(.5); }
 .sheet.gone { z-index: 5; transform: translate(-70%, 6%) rotate(-14deg); opacity: 0; pointer-events: none; }
+/* "EXAMPLE ONLY" watermark over the page viewer and the full-screen view: large, diagonal, faint, click-through */
+.sheets::after, .lightbox .lb-page::after {
+  content: "EXAMPLE ONLY"; position: absolute; inset: 0; z-index: 10; pointer-events: none;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  font: 800 13.5cqw/1 Inter, system-ui, sans-serif; letter-spacing: .04em;
+  color: rgba(224, 56, 79, .16); transform: rotate(-52deg); white-space: nowrap;   /* 52deg: the page's diagonal */
+  -webkit-text-stroke: 1.5px rgba(224, 56, 79, .28);
+}
+.lightbox .lb-page { position: relative; display: flex; container-type: inline-size; max-width: min(100%, 980px); max-height: 100%; }
 .sow-viewer:focus-visible .sheet.on { box-shadow: 0 0 0 3px var(--accent), 0 30px 60px -20px rgba(0,0,0,.7); }
 .pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 22px; }
 .pager button { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-size: 20px; cursor: pointer; line-height: 1; }
@@ -154,7 +163,7 @@ td:first-child { color: #c6cedc; width: 36%; }
 .dots i.on { background: var(--accent); transform: scale(1.25); }
 .pno { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; min-width: 40px; text-align: center; }
 .lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(5,8,14,.92); display: flex; align-items: center; justify-content: center; padding: 16px; }
-.lightbox img { max-width: min(100%, 980px); max-height: 100%; object-fit: contain; background: #fff; border-radius: 4px; box-shadow: 0 20px 60px rgba(0,0,0,.6); cursor: zoom-out; }
+.lightbox img { max-width: 100%; max-height: calc(100vh - 32px); object-fit: contain; background: #fff; border-radius: 4px; box-shadow: 0 20px 60px rgba(0,0,0,.6); cursor: zoom-out; }
 .lightbox .lb-nav { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
 .lightbox button { width: 42px; height: 42px; border-radius: 50%; border: 1px solid #3a4768; background: var(--panel); color: var(--text); font-size: 20px; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .sheet { transition: none; } }

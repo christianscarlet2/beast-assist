@@ -212,7 +212,7 @@ function sowViewer() {
   const lightbox = () => {
     const lb = document.createElement("div");
     lb.className = "lightbox";
-    lb.innerHTML = `<img alt=""><div class="lb-nav"><button aria-label="Previous">‹</button><button aria-label="Close">✕</button><button aria-label="Next">›</button></div>`;
+    lb.innerHTML = `<div class="lb-page"><img alt=""></div><div class="lb-nav"><button aria-label="Previous">‹</button><button aria-label="Close">✕</button><button aria-label="Next">›</button></div>`;
     const img = lb.querySelector("img"), [p, x, nx] = lb.querySelectorAll("button");
     const paint = () => { img.src = sheets[cur].src; img.alt = sheets[cur].alt; };
     const close = () => { lb.remove(); document.removeEventListener("keydown", key); };
