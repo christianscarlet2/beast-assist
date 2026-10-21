@@ -116,7 +116,7 @@ td:first-child { color: #c6cedc; width: 36%; }
 .lamp.wait { background: #c9a227; }
 @keyframes glow { 50% { box-shadow: 0 0 3px var(--ok); } }
 @media (prefers-reduced-motion: reduce) { .lamp.ok { animation: none; } }
-.light-name { font-weight: 600; font-size: 15px; }
+.light-name { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; min-width: 0; }
 .light-what { color: var(--muted); font-size: 12.5px; margin: 2px 0 0 24px; }
 .light-last { font-size: 13px; margin: 8px 0 0 24px; color: #c6cedc; overflow-wrap: anywhere; }
 .light-meta { font-size: 12px; margin: 4px 0 0 24px; color: var(--muted); }
