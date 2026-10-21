@@ -475,6 +475,11 @@ async def status():
             "all_ok": bool(rows) and all(r.get("ok") for r in rows)}
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse(HERE / "static" / "favicon.svg", media_type="image/svg+xml")
+
+
 @app.get("/healthz")
 async def healthz():
     return {"ok": True}
