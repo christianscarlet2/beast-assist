@@ -16,6 +16,7 @@ import httpx
 import yaml
 from mcp import ClientSession
 from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
+from mcp.shared.exceptions import MCPError
 
 HERE = Path(__file__).parent
 SERVERS = json.loads(os.environ.get("MCP_SERVERS", json.dumps({
@@ -26,15 +27,44 @@ def token() -> str:
     r = httpx.post(os.environ.get("TOKEN_URL", "http://localhost:8400/beast-dev-tenant/oauth2/v2.0/token"), data={
         "grant_type": "client_credentials", "client_id": os.environ.get("EVALS_CLIENT_ID", "beast-evals"),
         "client_secret": os.environ.get("EVALS_CLIENT_SECRET", "dev-evals-secret"),
-        "scope": "api://beast-assist/.default"}, timeout=10)
+        "scope": os.environ.get("AUTH_AUDIENCE", "api://beast-assist") + "/.default"}, timeout=10)
     r.raise_for_status()
     return r.json()["access_token"]
 
 
-async def call(sc: dict, tok: str):
+def _has(exc: BaseException, kind) -> bool:
+    return isinstance(exc, kind) or any(_has(e, kind) for e in getattr(exc, "exceptions", ()))
+
+
+async def _gateway_refusal(sc: dict, headers: dict) -> str | None:
+    """A gateway (APIM) refuses with a plain HTTP 4xx before MCP starts. The SDK turns that into a bare
+    MCPError and drops the body, so replay the initialize as plain HTTP to read what the gateway said."""
+    body = {"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
+        "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "beast-evals", "version": "1"}}}
+    async with httpx.AsyncClient(timeout=30) as c:
+        r = await c.post(SERVERS[sc["server"]], json=body,
+                         headers={**headers, "Accept": "application/json, text/event-stream"})
+    return f"HTTP {r.status_code}: {r.text}" if 400 <= r.status_code < 500 else None
+
+
+def _headers(sc: dict, tok: str) -> dict:
     headers = {"Authorization": f"Bearer {tok}"}
     if sc.get("skill"):
         headers["X-Skill-Id"] = sc["skill"]
+    return headers
+
+
+async def call(sc: dict, tok: str):
+    try:
+        return await _call(sc, tok)
+    except Exception as e:  # noqa: BLE001
+        if not _has(e, MCPError) or not (refusal := await _gateway_refusal(sc, _headers(sc, tok))):
+            raise
+        return True, refusal
+
+
+async def _call(sc: dict, tok: str):
+    headers = _headers(sc, tok)
     async with streamable_http_client(SERVERS[sc["server"]], http_client=create_mcp_http_client(headers=headers)) as streams:
         async with ClientSession(streams[0], streams[1]) as s:
             await s.initialize()

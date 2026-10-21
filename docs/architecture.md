@@ -8,7 +8,7 @@ flowchart LR
     agent --> spec[specialist ReAct agent<br/>tools = skill.allowed_tools]
   end
   entra[(Entra ID<br/>or mock-entra)] -.client credentials.-> agent
-  spec -->|Bearer JWT + X-Skill-Id| apim[Azure APIM<br/>validate-jwt, rate limit]
+  spec -->|Bearer JWT + X-Skill-Id| apim[Azure APIM<br/>validate-jwt, skill header]
   apim --> ing[Ingress + TLS<br/>cert-manager]
   ing --> agile[agile-mcp]
   ing --> college[college-mcp]
@@ -33,7 +33,7 @@ flowchart LR
 2. It gets an access token for its own app registration (client credentials) and opens MCP sessions
    only to the servers named in the skill's `allowed_tools`, sending `Authorization` and `X-Skill-Id`.
 3. APIM rejects the request unless the token is a valid Entra v2 token for `api://beast-assist` with a
-   Tools role, and requires the skill header. It rate-limits per calling app.
+   Tools role, and requires the skill header (Consumption allows no per-app rate limit).
 4. The MCP server validates the token again (signature against the tenant JWKS, issuer, audience,
    expiry). Defence in depth: a request that bypasses APIM inside the cluster still needs a real token.
 5. `tools/list` is filtered to the skill's tools on this server, so the model never sees the rest.

@@ -1,0 +1,19 @@
+# The public pair: the same servers, trusting real Entra ID tokens instead of mock-entra.
+# Apache serves them at https://mcp.scarletbeast.com/{agile,college}/, and APIM fronts that.
+#   docker compose -f docker-compose.yml -f docker-compose.azure.yml up -d agile-mcp-azure college-mcp-azure
+# ENTRA_TENANT_ID and AZURE_API_AUDIENCE come from .env (gateway/azure/setup.sh prints both).
+services:
+  agile-mcp-azure:
+    extends: {file: docker-compose.yml, service: agile-mcp}
+    environment: &azure
+      BEAST_ENV: staging
+      AUTH_ISSUER: https://login.microsoftonline.com/${ENTRA_TENANT_ID:?set ENTRA_TENANT_ID in .env}/v2.0
+      AUTH_JWKS_URL: https://login.microsoftonline.com/${ENTRA_TENANT_ID}/discovery/v2.0/keys
+      AUTH_AUDIENCE: ${AZURE_API_AUDIENCE:?set AZURE_API_AUDIENCE in .env}
+      ALLOWED_HOSTS: mcp.scarletbeast.com
+    ports: !override ["127.0.0.1:8431:8000"]
+
+  college-mcp-azure:
+    extends: {file: docker-compose.yml, service: college-mcp}
+    environment: *azure
+    ports: !override ["127.0.0.1:8432:8000"]

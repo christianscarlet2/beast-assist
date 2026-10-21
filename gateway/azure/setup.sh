@@ -13,7 +13,6 @@ LOCATION=${LOCATION:-eastus}
 APIM=${APIM:-beast-assist-apim}
 PUBLISHER_EMAIL=${PUBLISHER_EMAIL:-scarletbeast909@gmail.com}
 BACKEND_URL=${BACKEND_URL:-https://mcp.scarletbeast.com}   # where the ingress serves /agile and /college
-AUDIENCE=api://beast-assist
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 
 TENANT=$(az account show --query tenantId -o tsv)
@@ -26,7 +25,7 @@ if [[ $MODE == plan ]]; then
   cat <<PLAN
 Would create (free on a free account, APIM Consumption bills per call after 1M/month):
   resource group      $RG ($LOCATION)
-  app registration    beast-assist-api   audience $AUDIENCE, app roles Tools.Read, Tools.Write, Skills.Publish
+  app registration    beast-assist-api   audience = its app id, app roles Tools.Read, Tools.Write, Skills.Publish
   app registration    beast-agent        granted Tools.Read + Tools.Write, client secret
   app registration    beast-evals        granted Tools.Read, client secret
   app registration    beast-publisher    granted Skills.Publish, client secret
@@ -58,13 +57,17 @@ print(json.dumps([{"allowedMemberTypes": ["Application"], "description": d, "dis
                    ("Tools.Write", "Call MCP tools that change a backend"), ("Skills.Publish", "Publish skills to the registry")]]))
 PY
 )
-  API_ID=$(az ad app create --display-name beast-assist-api --identifier-uris "$AUDIENCE" \
-             --app-roles "$roles" --query appId -o tsv)
+  API_ID=$(az ad app create --display-name beast-assist-api --app-roles "$roles" --query appId -o tsv)
+  # new tenants only accept identifier URIs that contain the app or tenant id
+  az ad app update --id "$API_ID" --identifier-uris "api://$API_ID"
   az ad sp create --id "$API_ID" -o none
-  # v2 access tokens, so iss is https://login.microsoftonline.com/<tenant>/v2.0 as the servers expect
-  az ad app update --id "$API_ID" --set api.requestedAccessTokenVersion=2
 fi
+# v2 access tokens, so iss is https://login.microsoftonline.com/<tenant>/v2.0 as the servers expect
+# (outside the if: a fresh app has an empty `api` object, so `az ad app update --set` cannot reach it; Graph can)
+az rest -m PATCH -u "https://graph.microsoft.com/v1.0/applications(appId='$API_ID')" \
+  --headers Content-Type=application/json --body '{"api":{"requestedAccessTokenVersion":2}}' -o none
 API_SP=$(az ad sp show --id "$API_ID" --query id -o tsv)
+AUDIENCE=$API_ID  # v2 access tokens carry the API's app id as aud; clients ask for scope "$API_ID/.default"
 role_id() { az ad sp show --id "$API_ID" --query "appRoles[?value=='$1'].id | [0]" -o tsv; }
 
 client() {  # client <name> <role>...  -> creates the app + secret once, grants roles
@@ -106,7 +109,7 @@ for srv in agile college; do
      --url-template /mcp --method GET --display-name "MCP stream" -o none 2>/dev/null || true
   az rest -m PUT \
     -u "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.ApiManagement/service/$APIM/apis/$srv-mcp/policies/policy?api-version=2022-08-01" \
-    --body "$(python3 -c 'import json,sys;print(json.dumps({"properties":{"format":"rawxml","value":open(sys.argv[1]).read()}}))' "$HERE/apim/mcp-api-policy.xml")" -o none
+    --body "$(python3 -c 'import json,sys;print(json.dumps({"properties":{"format":"rawxml","value":open(sys.argv[1]).read()}}))' "$HERE/apim/mcp-api-policy.xml")" -o none >/dev/null
 done
 
 GW=$(az apim show -g "$RG" -n "$APIM" --query gatewayUrl -o tsv)
@@ -114,6 +117,7 @@ cat <<DONE
 
 Done. Point the agent and evals at Azure:
   ENTRA_TENANT_ID=$TENANT
+  AZURE_API_AUDIENCE=$AUDIENCE    (AUTH_AUDIENCE for the servers, agent and evals)
   TOKEN_URL=https://login.microsoftonline.com/$TENANT/oauth2/v2.0/token
   MCP_SERVERS={"agile-mcp": "$GW/agile/mcp", "college-mcp": "$GW/college/mcp"}
   client ids and secrets: ~/.beast-assist/beast-{agent,evals,publisher}.env

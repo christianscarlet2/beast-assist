@@ -1,9 +1,11 @@
 <!--
-  Azure API Management policy for the Beast Assist MCP API (Consumption tier compatible).
-  Inbound order: reject without a valid Entra token -> per-client rate limit -> pass the caller's
+  Azure API Management policy for the Beast Assist MCP API (Consumption tier).
+  Inbound order: reject without a valid Entra token -> require the skill header -> pass the caller's
   identity and the skill header through to the MCP servers, which validate the token AGAIN (defence in
   depth) and ask OPA about the skill's allowed_tools.
   {{tenant-id}} and {{audience}} are APIM named values set by gateway/azure/setup.sh.
+  No per-client rate limit: Consumption rejects rate-limit-by-key ("Policy is not allowed in 'Consumption' sku").
+  On Developer/Standard, add one after check-header, keyed on the token's azp claim (the calling app).
 -->
 <policies>
   <inbound>
@@ -28,8 +30,6 @@
     <!-- every MCP call must say which skill it runs under; OPA decides what that skill may do -->
     <check-header name="X-Skill-Id" failed-check-httpcode="400"
                   failed-check-error-message="X-Skill-Id header is required" ignore-case="true" />
-    <rate-limit-by-key calls="120" renewal-period="60"
-                       counter-key="@(((Jwt)context.Variables[&quot;jwt&quot;]).Claims.GetValueOrDefault(&quot;azp&quot;, &quot;anon&quot;))" />
     <set-header name="X-Caller-Oid" exists-action="override">
       <value>@(((Jwt)context.Variables["jwt"]).Claims.GetValueOrDefault("oid", ""))</value>
     </set-header>

@@ -67,7 +67,7 @@ Kubernetes with Kustomize, and puts Azure API Management in front with a single 
 | Evals | `evals/` | Benchmark scenarios (YAML) run through the full token, MCP, OPA and backend path; results saved as JSON |
 | Local stack | `docker-compose.yml`, `Dockerfile` | PostgreSQL + pgvector, dev issuer, registry, OPA, both servers, Jaeger |
 | Kubernetes | `deploy/k8s/` | Kustomize base + dev/prod overlays: Deployments with an OPA sidecar, probes, HPA, PDB, NetworkPolicies, cert-manager Certificate, Ingress |
-| Azure | `gateway/` | APIM policy (`validate-jwt`, required skill header, rate limit) and `setup.sh` that creates the Entra app registrations and APIM Consumption |
+| Azure | `gateway/` | APIM policy (`validate-jwt`, required skill header) and `setup.sh` that creates the Entra app registrations and APIM Consumption |
 | CI | `.github/workflows/ci.yml` | Tests, skill gates, policy tests, manifest render + schema check, integration publish, image build |
 
 ## Architecture
@@ -547,19 +547,52 @@ BACKEND_URL=https://mcp.scarletbeast.com ./gateway/azure/setup.sh apply
 ./gateway/azure/setup.sh destroy     # remove it all
 ```
 
+Installing the CLI on Ubuntu: Microsoft's one-line installer (`aka.ms/InstallAzureCLIDeb`) aborts if any
+other apt source is broken. Adding `packages.microsoft.com/repos/azure-cli/` as a deb822 source with
+its key in `/etc/apt/keyrings/microsoft.gpg` and running `apt-get install azure-cli` works regardless.
+
 `apply` creates the resource group, the four app registrations (with app roles and role
 assignments, and secrets saved to `~/.beast-assist/<app>.env` with mode 600), an API Management
 instance on the **Consumption** tier, one API per server, and applies
 `gateway/apim/mcp-api-policy.xml`:
 
-- `validate-jwt` against your tenant's OpenID configuration, audience `api://beast-assist`, a Tools
-  role required
+- `validate-jwt` against your tenant's OpenID configuration, audience = the `beast-assist-api` app id,
+  a Tools role required
 - the `X-Skill-Id` header required
-- `rate-limit-by-key` per calling app (120 calls a minute)
+- no per-app rate limit: the Consumption tier does not allow `rate-limit-by-key` (add it on Developer/Standard)
 - caller oid and request id forwarded to the servers, which check the token again
 
-It prints the values to switch the agent and evals to Azure (`ENTRA_TENANT_ID`, `TOKEN_URL`,
-`MCP_SERVERS`).
+It prints the values to switch the agent and evals to Azure (`ENTRA_TENANT_ID`, `AZURE_API_AUDIENCE`,
+`TOKEN_URL`, `MCP_SERVERS`).
+
+### The audience on a real tenant
+
+The local stack uses the audience `api://beast-assist`. A real tenant differs in two ways, both met on
+the first live run:
+
+- New tenants refuse an identifier URI that does not contain the tenant id, the app id or a verified
+  domain. `setup.sh` gives the API `api://<app id>`.
+- Entra **v2** access tokens carry the API's **app id** (a GUID) in `aud`, not the identifier URI. So
+  the servers, APIM and the clients all use the app id: `AUTH_AUDIENCE=<app id>`, scope
+  `<app id>/.default`. A fresh app has an empty `api` object, so `setup.sh` sets
+  `requestedAccessTokenVersion=2` through Microsoft Graph (`az ad app update --set` cannot reach it).
+
+### Serving the servers to APIM
+
+APIM needs a public HTTPS backend. `docker-compose.azure.yml` runs a second pair of servers that trust
+the real tenant (`BEAST_ENV=staging`, so draft skills are refused) on ports 8431/8432, next to the
+dev pair that keeps trusting mock-entra. Apache serves them as `https://mcp.scarletbeast.com/agile/`
+and `/college/` (everything else is 403), with the wildcard certificate:
+
+```bash
+# ENTRA_TENANT_ID and AZURE_API_AUDIENCE in .env (setup.sh prints both)
+make azure-up
+make evals-azure     # the 13 scenarios through APIM with a real Entra token
+```
+
+Without the skill header APIM answers a plain HTTP 400 before MCP starts. The MCP SDK turns that into
+a bare `MCPError` with no body, so `run_evals.py` replays the request as plain HTTP to read the
+gateway's message, and that scenario passes either way.
 
 ## CI/CD
 
@@ -616,6 +649,7 @@ Verified on 2026-10-19 on the development server, against the live Warden board 
 | Rego policy tests (`opa test policy/`) | 6 of 6 passed |
 | `validate_skills.py` / `audit_skill_config.py` | 3 of 3 skills valid; audit passes (11 tools across 2 servers) |
 | Benchmark scenarios (`evals/run_evals.py`) | 13 of 13 passed |
+| The same scenarios through Azure APIM with real Entra tokens (`make evals-azure`, 2026-10-20) | 13 of 13 passed |
 | RAG index | 33 lessons, 521 chunks, 6 courses |
 | Retrieval quality (`rag/eval_retrieval.py`) | hit@1 1.00, hit@5 1.00, MRR 1.00 on 8 questions |
 | Kubernetes overlays (`kustomize build` + `kubeconform -strict`) | dev 23 valid, prod 21 valid, 1 skipped each (the cert-manager CRD) |
@@ -627,9 +661,13 @@ as Entra does, and verifiers refetch the JWKS once on a signature failure).
 
 Limits:
 
-- **Not run yet**: `gateway/azure/setup.sh` against a real tenant (it needs the Azure account) and a
-  Bedrock-backed agent run (it needs AWS credentials and a model id). Both are wired and documented;
-  the first live run may need small fixes.
+- **Azure is live** since 2026-10-20 (resource group `beast-assist`, APIM `beast-assist-apim`, East US).
+  The first run needed three fixes, all in `setup.sh` and the policy now: the identifier URI rule, the
+  v2 token setting, and Consumption refusing `rate-limit-by-key`.
+- **Not run yet**: a Bedrock-backed agent run (it needs AWS credentials and a model id). It is wired
+  and documented; the first live run may need small fixes.
+- The Azure client secrets expire after one year (2027-10-20). Renew one with
+  `az ad app credential reset --id <client id> --years 1` and update `~/.beast-assist/<app>.env`.
 - The Skills Registry's read endpoints are unauthenticated by design (cluster-internal, protected by
   NetworkPolicy); put them behind APIM before exposing them.
 - The dev issuer's secrets are public dev values. It exists only for local use.
