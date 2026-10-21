@@ -5,6 +5,7 @@ import httpx
 import psycopg
 
 from beast_mcp import ToolFailure
+from beast_rag import space
 
 
 class CollegeBackend:
@@ -27,7 +28,7 @@ class CollegeBackend:
 
     async def search(self, qvec: str, k: int, track: str = "") -> list[dict]:
         sql = ("SELECT lesson_id, track, level, title, heading, body, 1 - (embedding <=> %s::vector) AS score "
-               "FROM college_chunks " + ("WHERE track = %s " if track else "") +
+               f"FROM {space()[1]} " + ("WHERE track = %s " if track else "") +
                "ORDER BY embedding <=> %s::vector LIMIT %s")
         args = (qvec, track, qvec, k) if track else (qvec, qvec, k)
         try:

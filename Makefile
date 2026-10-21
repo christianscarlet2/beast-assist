@@ -1,5 +1,6 @@
 # Beast Assist: the common tasks. `make help` lists them.
 PY ?= .venv/bin/python
+export BEDROCK_MODEL_ID ?= us.amazon.nova-pro-v1:0
 READY = http://localhost:8410/readyz http://localhost:8421/readyz http://localhost:8422/readyz
 
 help:            ## this list
@@ -44,7 +45,7 @@ rag-eval:        ## retrieval quality: hit@1, hit@5, MRR
 ask:             ## RAG from the command line: make ask Q="how do I validate a JWT?"
 	$(PY) rag/ask.py "$(Q)"
 
-agent:           ## run the coordinator: make agent R="standup for SB" (needs BEDROCK_MODEL_ID)
+agent:           ## run the coordinator: make agent R="standup for SB" (Bedrock; BEDROCK_MODEL_ID defaults to Nova Pro)
 	$(PY) -m agent.coordinator "$(R)"
 
 new-server:      ## scaffold a server: make new-server NAME=jira-mcp

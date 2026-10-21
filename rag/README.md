@@ -11,8 +11,8 @@ documents are every lesson Scarlet College has written.
  beast_rag.chunk_markdown()                    2 CHUNK     split on ## / ### headings, max ~1,400 chars,
         │                                                  long sections cut on paragraph breaks
         ▼
- beast_rag.embed()                             3 EMBED     384-dim vectors: bge-small (local CPU) or
-        │                                                  Amazon Titan V2 (EMBEDDINGS=bedrock)
+ beast_rag.embed()                             3 EMBED     vectors: bge-small, 384 dims (local CPU) or
+        │                                                  Amazon Titan V2, 512 dims (EMBEDDINGS=bedrock)
         ▼
  PostgreSQL + pgvector  college_chunks         4 STORE     HNSW index, cosine distance
         │
@@ -47,7 +47,7 @@ The `study-plan-from-job` skill uses the same search to attach a lesson to each 
 | --- | --- | --- |
 | Smaller or larger chunks | `chunk_markdown(max_chars=...)` in `rag/index_college.py` | hit@1 vs hit@5 |
 | Drop the title prefix on each chunk | the `embed([f"{c['title']} - {h}..."])` line | hit@1 falls: chunks lose context |
-| Titan instead of bge-small | `EMBEDDINGS=bedrock`, then `index_college.py --rebuild` | MRR, cost per 1k chunks |
+| Titan instead of bge-small | `EMBEDDINGS=bedrock python rag/index_college.py`, then `EMBEDDINGS=bedrock python rag/eval_retrieval.py` (own table, the local index is untouched). First run: hit@1 0.88, MRR 0.92 vs 1.00 / 1.00 | MRR, cost per 1k chunks |
 | More results | `--k 10` | hit@k rises, answer prompts get longer |
 | Hybrid search | add a `tsvector` column and blend `ts_rank` with vector score | exact terms like "422" |
 | A re-ranker | re-score the top 20 with a cross-encoder, keep 5 | hit@1 |

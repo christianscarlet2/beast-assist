@@ -1,24 +1,38 @@
 """RAG over Scarlet College: chunk lessons by heading, embed, store in PostgreSQL with pgvector.
 
 Embeddings: EMBEDDINGS=local (default) runs BAAI/bge-small-en-v1.5 on CPU via fastembed (384 dims);
-EMBEDDINGS=bedrock calls Amazon Titan Text Embeddings V2 at 384 dims, so either fills the same column."""
+EMBEDDINGS=bedrock calls Amazon Titan Text Embeddings V2 (512 dims: Titan offers only 256, 512 or 1024).
+Each model gets its own tables, so both indexes can live side by side and be compared."""
 import json
 import os
 import re
 
-DIM = 384
 _local = None
+
+# EMBEDDINGS -> (dimensions, chunks table, index-state table)
+SPACES = {
+    "local": (384, "college_chunks", "college_index"),
+    "bedrock": (512, "college_chunks_titan", "college_index_titan"),
+}
+
+
+def space() -> tuple[int, str, str]:
+    mode = os.environ.get("EMBEDDINGS", "local")
+    if mode not in SPACES:
+        raise ValueError(f"EMBEDDINGS must be one of {sorted(SPACES)}, not {mode!r}")
+    return SPACES[mode]
 
 
 def embed(texts: list[str], kind: str = "passage") -> list[list[float]]:
     mode = os.environ.get("EMBEDDINGS", "local")
+    dim = space()[0]
     if mode == "bedrock":
         import boto3
         rt = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION", "us-east-1"))
         out = []
         for t in texts:
             r = rt.invoke_model(modelId="amazon.titan-embed-text-v2:0",
-                                body=json.dumps({"inputText": t[:8000], "dimensions": DIM, "normalize": True}))
+                                body=json.dumps({"inputText": t[:8000], "dimensions": dim, "normalize": True}))
             out.append(json.loads(r["body"].read())["embedding"])
         return out
     global _local
@@ -60,9 +74,11 @@ def vec(v: list[float]) -> str:
     return "[" + ",".join(f"{x:.6f}" for x in v) + "]"
 
 
-SCHEMA = f"""
+def schema() -> str:
+    dim, chunks, index = space()
+    return f"""
 CREATE EXTENSION IF NOT EXISTS vector;
-CREATE TABLE IF NOT EXISTS college_chunks (
+CREATE TABLE IF NOT EXISTS {chunks} (
   id          bigserial PRIMARY KEY,
   lesson_id   text NOT NULL,
   track       text NOT NULL,
@@ -70,8 +86,9 @@ CREATE TABLE IF NOT EXISTS college_chunks (
   title       text NOT NULL,
   heading     text NOT NULL,
   body        text NOT NULL,
-  embedding   vector({DIM}) NOT NULL
+  embedding   vector({dim}) NOT NULL
 );
-CREATE INDEX IF NOT EXISTS college_chunks_lesson ON college_chunks (lesson_id);
-CREATE INDEX IF NOT EXISTS college_chunks_hnsw ON college_chunks USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS {chunks}_lesson ON {chunks} (lesson_id);
+CREATE INDEX IF NOT EXISTS {chunks}_hnsw ON {chunks} USING hnsw (embedding vector_cosine_ops);
+CREATE TABLE IF NOT EXISTS {index} (lesson_id text PRIMARY KEY, sha text NOT NULL);
 """

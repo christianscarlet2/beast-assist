@@ -418,13 +418,25 @@ python rag/eval_retrieval.py           # hit@1, hit@5, MRR over rag/questions.ya
 - **Chunk**: on `##`/`###` headings, at most about 1,400 characters, long sections cut at paragraph
   breaks; each chunk is embedded with its lesson title and heading as context.
 - **Embed**: `BAAI/bge-small-en-v1.5` on CPU via fastembed (384 dims, baked into the image), or Amazon
-  Titan Text Embeddings V2 at 384 dims with `EMBEDDINGS=bedrock`, filling the same column.
-- **Store**: PostgreSQL `college_chunks` with an HNSW index on cosine distance; a per-lesson content
-  hash makes re-indexing skip unchanged lessons.
+  Titan Text Embeddings V2 with `EMBEDDINGS=bedrock` (512 dims: Titan offers only 256, 512 or 1024).
+- **Store**: PostgreSQL with an HNSW index on cosine distance, one table per embedding model
+  (`college_chunks` for bge-small, `college_chunks_titan` for Titan), so both indexes live side by side
+  and `EMBEDDINGS` picks which one indexing, `ask.py`, the eval and `search_lessons` use. A per-lesson
+  content hash makes re-indexing skip unchanged lessons.
 - **Retrieve**: `college-mcp:search_lessons` (the agent's way in) or `rag/ask.py`.
 - **Generate**: Bedrock Converse with an "answer only from the numbered passages, cite them" prompt.
   The `college-tutor` skill does the same inside the agent and refuses to answer from memory when the
-  best score is under 0.55.
+  best score is under 0.55 (a threshold tuned on bge-small scores; re-tune it for Titan).
+
+Measured on the 8 questions in `rag/questions.yaml` (2026-10-20, 33 lessons, 521 chunks):
+
+| Embeddings | hit@1 | hit@5 | MRR | Index time |
+| --- | --- | --- | --- | --- |
+| bge-small-en-v1.5, local CPU, 384 dims | 1.00 | 1.00 | 1.00 | about 2 min |
+| Titan Text Embeddings V2, Bedrock, 512 dims | 0.88 | 1.00 | 0.92 | 464 s (one call per chunk) |
+
+Titan ranked the right lesson third for "Test the 404 and 422 paths of an API with pytest TestClient".
+Eight questions is far too few to call either model better; it shows how to run the comparison.
 
 ## The agent: LangGraph coordinator on Bedrock
 
@@ -445,13 +457,34 @@ resolve_skill ──► preflight ──► run_specialist ──► END
   0.3.2 still requires `mcp<2.0`).
 
 ```bash
-export AWS_REGION=us-east-1 BEDROCK_MODEL_ID=<a model enabled in your Bedrock account>
+export AWS_REGION=us-east-1 BEDROCK_MODEL_ID=us.amazon.nova-pro-v1:0   # or a Claude model, see below
 python -m agent.coordinator "standup for the SB board"
 python -m agent.coordinator "make me a study plan for this job" job_description="$(cat jd.txt)"
 ```
 
 `agent/model.py` also has `ScriptedModel`, which replays fixed tool calls so the graph, the scoping
 and the MCP plumbing can be tested without a model.
+
+### Connecting Bedrock
+
+Credentials are the standard AWS chain, so either works:
+
+- a **Bedrock API key** in `AWS_BEARER_TOKEN_BEDROCK` (boto3 1.39 or later picks it up), or
+- normal IAM credentials (`aws configure`, an instance role, or IRSA on EKS).
+
+Model ids are **inference profiles** (`us.` or `global.` prefix), which route each call across regions.
+List what an account can see with `aws bedrock list-inference-profiles`; seeing a profile does not
+mean the account may call it.
+
+Anthropic models need a one-time **use case form** per AWS account: Bedrock console → Model catalog →
+any Anthropic model → submit use case details. Until it is approved, every Claude call fails with
+`ResourceNotFoundException: Model use case details have not been submitted`. Amazon's models (Nova,
+Titan) need no form, which is why the verified run below used Nova Pro. After the form:
+`BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-6`.
+
+Verified 2026-10-20 on Bedrock (us-east-1, Nova Pro): the coordinator answered "standup for the SB
+project" by calling `list_tasks` twice and `get_task` once under the `board-standup` skill, and
+`rag/ask.py` answered from the retrieved passages with citations.
 
 ## Evaluation suites
 
@@ -620,7 +653,7 @@ gateway's message, and that scenario passes either way.
 | `COLLEGE_BASE` | college-mcp, RAG | `https://college.scarletbeast.com` | College API |
 | `RAG_DSN` | college-mcp, RAG | `postgresql://beast:beast@localhost:55432/beast` | pgvector database |
 | `REGISTRY_DSN` | registry | same | Registry database |
-| `EMBEDDINGS` | RAG | `local` | `local` (fastembed) or `bedrock` (Titan V2) |
+| `EMBEDDINGS` | RAG | `local` | `local` (fastembed, 384 dims) or `bedrock` (Titan V2, 512 dims, own table) |
 | `AWS_REGION`, `BEDROCK_MODEL_ID` | agent, RAG | | Bedrock |
 | `REGISTRY_URL`, `TOKEN_URL`, `MCP_SERVERS` | agent, evals, upload | local | Where things are |
 | `AGENT_CLIENT_ID/SECRET`, `EVALS_CLIENT_ID/SECRET`, `PUBLISH_CLIENT_ID/SECRET` | agent, evals, upload | dev values | Client credentials |
@@ -650,8 +683,9 @@ Verified on 2026-10-19 on the development server, against the live Warden board 
 | `validate_skills.py` / `audit_skill_config.py` | 3 of 3 skills valid; audit passes (11 tools across 2 servers) |
 | Benchmark scenarios (`evals/run_evals.py`) | 13 of 13 passed |
 | The same scenarios through Azure APIM with real Entra tokens (`make evals-azure`, 2026-10-20) | 13 of 13 passed |
-| RAG index | 33 lessons, 521 chunks, 6 courses |
-| Retrieval quality (`rag/eval_retrieval.py`) | hit@1 1.00, hit@5 1.00, MRR 1.00 on 8 questions |
+| RAG index | 33 lessons, 521 chunks, 6 courses (both bge-small and Titan indexes) |
+| Retrieval quality (`rag/eval_retrieval.py`) | bge-small: hit@1 1.00, MRR 1.00; Titan: hit@1 0.88, MRR 0.92 (8 questions) |
+| Agent and RAG generation on Bedrock (Nova Pro, 2026-10-20) | standup and cited RAG answer produced |
 | Kubernetes overlays (`kustomize build` + `kubeconform -strict`) | dev 23 valid, prod 21 valid, 1 skipped each (the cert-manager CRD) |
 
 The evals found two real bugs on their first run, both fixed with tests: the board answers an unknown
@@ -664,8 +698,8 @@ Limits:
 - **Azure is live** since 2026-10-20 (resource group `beast-assist`, APIM `beast-assist-apim`, East US).
   The first run needed three fixes, all in `setup.sh` and the policy now: the identifier URI rule, the
   v2 token setting, and Consumption refusing `rate-limit-by-key`.
-- **Not run yet**: a Bedrock-backed agent run (it needs AWS credentials and a model id). It is wired
-  and documented; the first live run may need small fixes.
+- **Bedrock is live** since 2026-10-20 with Amazon Nova Pro and Titan embeddings. Claude on Bedrock
+  waits on the account's Anthropic use case form (see "Connecting Bedrock").
 - The Azure client secrets expire after one year (2027-10-20). Renew one with
   `az ad app credential reset --id <client id> --years 1` and update `~/.beast-assist/<app>.env`.
 - The Skills Registry's read endpoints are unauthenticated by design (cluster-internal, protected by

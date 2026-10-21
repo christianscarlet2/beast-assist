@@ -10,7 +10,7 @@ import os
 
 import psycopg
 
-from beast_rag import embed, vec
+from beast_rag import embed, space, vec
 
 DSN = os.environ.get("RAG_DSN", "postgresql://beast:beast@localhost:55432/beast")
 PROMPT = """Answer the question using ONLY the numbered passages. Cite passages like [2]. If they do not
@@ -24,7 +24,7 @@ Question: {question}"""
 def retrieve(question: str, k: int = 5, course: str = "") -> list[dict]:
     qv = vec(embed([question], "query")[0])
     sql = ("SELECT lesson_id, track, level, title, heading, body, 1 - (embedding <=> %s::vector) AS score "
-           "FROM college_chunks " + ("WHERE track = %s " if course else "") + "ORDER BY embedding <=> %s::vector LIMIT %s")
+           f"FROM {space()[1]} " + ("WHERE track = %s " if course else "") + "ORDER BY embedding <=> %s::vector LIMIT %s")
     args = (qv, course, qv, k) if course else (qv, qv, k)
     with psycopg.connect(DSN) as con:
         cur = con.execute(sql, args)

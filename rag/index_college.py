@@ -12,7 +12,7 @@ import time
 import httpx
 import psycopg
 
-from beast_rag import SCHEMA, chunk_markdown, embed, vec
+from beast_rag import chunk_markdown, embed, schema, space, vec
 
 BASE = os.environ.get("COLLEGE_BASE", "https://college.scarletbeast.com").rstrip("/")
 DSN = os.environ.get("RAG_DSN", "postgresql://beast:beast@localhost:55432/beast")
@@ -46,12 +46,12 @@ def main():
     http = httpx.Client(base_url=BASE, timeout=30)
     cat = get_json(http, "/api/catalog")
     lessons = [l for l in cat["lessons"] if not a.course or l["track"] == a.course]
+    _, chunks_t, index_t = space()
     with psycopg.connect(DSN, autocommit=True) as con:
-        con.execute(SCHEMA)
-        con.execute("CREATE TABLE IF NOT EXISTS college_index (lesson_id text PRIMARY KEY, sha text NOT NULL)")
+        con.execute(schema())
         if a.rebuild:
-            con.execute("TRUNCATE college_chunks, college_index")
-        done = dict(con.execute("SELECT lesson_id, sha FROM college_index").fetchall())
+            con.execute(f"TRUNCATE {chunks_t}, {index_t}")
+        done = dict(con.execute(f"SELECT lesson_id, sha FROM {index_t}").fetchall())
         t0, n_chunks, n_new = time.time(), 0, 0
         for l in lessons:
             c = get_json(http, f"/api/lesson/{l['id']}")["lesson"]["content"]
@@ -63,20 +63,20 @@ def main():
             # the title rides along in every embedded chunk, so a passage keeps its context
             vecs = embed([f"{c['title']} - {h}\n{body}" for h, body in chunks])
             with con.transaction():
-                con.execute("DELETE FROM college_chunks WHERE lesson_id = %s", (l["id"],))
+                con.execute(f"DELETE FROM {chunks_t} WHERE lesson_id = %s", (l["id"],))
                 with con.cursor() as cur:
                     cur.executemany(
-                        "INSERT INTO college_chunks (lesson_id, track, level, title, heading, body, embedding) "
+                        f"INSERT INTO {chunks_t} (lesson_id, track, level, title, heading, body, embedding) "
                         "VALUES (%s,%s,%s,%s,%s,%s,%s::vector)",
                         [(l["id"], l["track"], l["level"], c["title"], h, body, vec(v))
                          for (h, body), v in zip(chunks, vecs)])
-                con.execute("INSERT INTO college_index VALUES (%s,%s) ON CONFLICT (lesson_id) DO UPDATE SET sha=EXCLUDED.sha",
+                con.execute(f"INSERT INTO {index_t} VALUES (%s,%s) ON CONFLICT (lesson_id) DO UPDATE SET sha=EXCLUDED.sha",
                             (l["id"], sha))
             n_chunks += len(chunks)
             n_new += 1
             print(f"  {l['track']:<12} L{l['level']:<2} {len(chunks):>3} chunks  {c['title'][:70]}")
-        total = con.execute("SELECT count(*) FROM college_chunks").fetchone()[0]
-    print(f"indexed {n_new} lessons ({n_chunks} chunks) in {time.time() - t0:.0f}s; {total} chunks in the index")
+        total = con.execute(f"SELECT count(*) FROM {chunks_t}").fetchone()[0]
+    print(f"indexed {n_new} lessons ({n_chunks} chunks) in {time.time() - t0:.0f}s; {total} chunks in {chunks_t}")
 
 
 if __name__ == "__main__":
