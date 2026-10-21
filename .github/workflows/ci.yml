@@ -50,8 +50,13 @@ jobs:
           python scripts/wait_ready.py http://localhost:8410/readyz
       - name: Publish skills through the gates
         run: python scripts/upload_skills.py
-      - name: OPA sees the published scopes
-        run: curl -sf localhost:18181/v1/data/beast/skills | python -c "import json,sys; d=json.load(sys.stdin)['result']; assert 'board-standup' in d, d"
+      - name: OPA sees the published scopes (it polls the registry bundle every 5-15 s)
+        run: |
+          for i in $(seq 15); do
+            curl -sf localhost:18181/v1/data/beast/skills | python -c "import json,sys; d=json.load(sys.stdin).get('result') or {}; sys.exit('board-standup' not in d)" && exit 0
+            sleep 3
+          done
+          echo "OPA never loaded the published skills"; exit 1
 
   image:
     runs-on: ubuntu-latest
