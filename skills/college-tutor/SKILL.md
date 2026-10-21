@@ -1,7 +1,7 @@
 ---
 name: college-tutor
 description: Answer a study question from Scarlet College lessons, citing the lessons it used.
-version: 1.0.0
+version: 1.1.1
 lifecycle: production
 owner: college@scarletbeast.com
 tags: [college, rag, read-only]
@@ -18,6 +18,7 @@ preflight:
   - name: question
     description: What the student wants to understand.
     required: true
+    from_request: true
   - name: course
     description: Limit the search to one course key (optional).
     required: false

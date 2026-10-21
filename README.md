@@ -72,6 +72,13 @@ Kubernetes with Kustomize, and puts Azure API Management in front with a single 
 
 ## Architecture
 
+The live deployment (details in [docs/architecture.md](docs/architecture.md)):
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/live-dark.svg">
+  <img alt="Beast Assist live deployment on Azure and AWS" src="docs/diagrams/live-light.svg">
+</picture>
+
 ```mermaid
 flowchart LR
   user([User]) --> agent
@@ -302,6 +309,8 @@ allowed_tools:                           # THE AUTHORIZATION SCOPE, enforced by 
   - agile-mcp:get_task
 preflight:                               # inputs checked before anything runs
   - {name: project, description: Board project key, required: false, default: SB}
+  # from_request: true fills an input from the user's own words (college-tutor's `question`),
+  # so asking the question IS supplying it
 ---
 # Board standup
 ## Workflow        numbered steps naming each tool as server:tool
@@ -627,6 +636,48 @@ Without the skill header APIM answers a plain HTTP 400 before MCP starts. The MC
 a bare `MCPError` with no body, so `run_evals.py` replays the request as plain HTTP to read the
 gateway's message, and that scenario passes either way.
 
+## Running in the cloud: Azure Container Apps + Amazon Bedrock
+
+Since 2026-10-21 the whole platform runs in the cloud, and the live console is at
+**https://cognizant.scarletbeast.com**. `gateway/azure/deploy_apps.sh` deploys it all from the image CI publishes:
+
+| Piece | Where |
+| --- | --- |
+| `beast-agile-mcp`, `beast-college-mcp` | Azure Container Apps, Central US (external ingress; APIM's backends) |
+| `beast-opa` | Azure Container Apps, internal ingress only; pulls policy **and** skills from the registry bundle (`BUNDLE_POLICY`) |
+| `beast-registry` | Azure Container Apps; skills published to it through the Entra-protected publish endpoint |
+| `beast-demo` | Azure Container Apps, custom domain `cognizant.scarletbeast.com` with an Azure-managed certificate |
+| `beast-index` | Azure Container Apps **job**, daily at 06:00 UTC: RAG ingestion into the cloud database |
+| PostgreSQL 16 + pgvector | Azure Database for PostgreSQL Flexible Server (Burstable B1ms), Central US |
+| Gateway, identity | Azure API Management (Consumption, East US), Microsoft Entra ID |
+| Video | Azure Blob Storage |
+| Model | Amazon Bedrock, us-east-1 (Nova Pro; Claude once the account's use-case form is approved) |
+
+```bash
+TAG=$(git rev-parse HEAD) AGILE_API_TOKEN=... AWS_BEARER_TOKEN_BEDROCK=... ./gateway/azure/deploy_apps.sh
+```
+
+The servers wrap two existing Scarlet Beast web apps (the agile board and Scarlet College), which stay on their
+own server as the systems of record, the way Jira would at a client. The agile server runs with
+`AGILE_PROJECTS=BA`, so the public deployment can see only the BA demo project even with a valid token.
+
+**The live console** (`demo/`) holds the read-only `beast-evals` credentials server-side and runs fixed scenarios
+through Entra → APIM → MCP server → OPA, showing each hop, the exact JSON-RPC, and the evidence headers:
+`X-Beast-Gateway` (APIM's region and service, also on refusals) and `X-Served-By` (the Container Apps replica).
+`/api/agent` runs the coordinator on Bedrock with a read-only token and per-IP and daily limits.
+`/api/status` is a status board: a background monitor checks every Azure and AWS service (each MCP server's
+readiness, OPA's loaded bundle, the registry, the database's chunk count, an end-to-end tools/list through APIM,
+APIM's refusal of unauthenticated calls, a fresh Entra token, the video in Blob Storage, and a real Bedrock call
+every 5 minutes) and keeps each one's last result, last healthy time and recent history.
+
+What the first cloud deploy needed:
+
+- Postgres Flexible Server is **region-restricted** on new subscriptions (East US, East US 2 and West US 2 refused);
+  `az postgres flexible-server list-skus -l <region>` shows the reason. Central US worked.
+- `az containerapp create --args` reads an image's own `--flags` (OPA's `--server`) as az flags, and `--yaml`
+  rejected the same definition, so OPA is created with a direct ARM `PUT`.
+- `az postgres flexible-server create --database-name` only applies to elastic clusters; create the database after.
+
 ## CI/CD
 
 `.github/workflows/ci.yml`:
@@ -683,6 +734,8 @@ Verified on 2026-10-19 on the development server, against the live Warden board 
 | `validate_skills.py` / `audit_skill_config.py` | 3 of 3 skills valid; audit passes (11 tools across 2 servers) |
 | Benchmark scenarios (`evals/run_evals.py`) | 13 of 13 passed |
 | The same scenarios through Azure APIM with real Entra tokens (`make evals-azure`, 2026-10-20) | 13 of 13 passed |
+| The same scenarios against the cloud deployment: APIM → Azure Container Apps (2026-10-21) | 13 of 13 passed |
+| Live console scenarios on cognizant.scarletbeast.com (2026-10-21) | 8 of 8 behave as designed (3 allowed, 5 refused at the intended layer) |
 | RAG index | 33 lessons, 521 chunks, 6 courses (both bge-small and Titan indexes) |
 | Retrieval quality (`rag/eval_retrieval.py`) | bge-small: hit@1 1.00, MRR 1.00; Titan: hit@1 0.88, MRR 0.92 (8 questions) |
 | Agent and RAG generation on Bedrock (Nova Pro, 2026-10-20) | standup and cited RAG answer produced |
@@ -695,7 +748,7 @@ as Entra does, and verifiers refetch the JWKS once on a signature failure).
 
 Limits:
 
-- **Azure is live** since 2026-10-20 (resource group `beast-assist`, APIM `beast-assist-apim`, East US).
+- **The platform runs in Azure** since 2026-10-21 (see "Running in the cloud"); the gateway since 2026-10-20 (resource group `beast-assist`, APIM `beast-assist-apim`, East US).
   The first run needed three fixes, all in `setup.sh` and the policy now: the identifier URI rule, the
   v2 token setting, and Consumption refusing `rate-limit-by-key`.
 - **Bedrock is live** since 2026-10-20 with Amazon Nova Pro and Titan embeddings. Claude on Bedrock

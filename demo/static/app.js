@@ -155,7 +155,8 @@ function film() {
   const v = $("#film");
   if (!VIDEO) { $("#video").style.display = "none"; return; }
   v.poster = VIDEO.replace(/\.mp4$/, ".jpg");
-  v.innerHTML = `<source src="${VIDEO}" type="video/mp4"><track kind="captions" srclang="en" label="English" src="/static/captions.vtt" default>`;
+  v.crossOrigin = "anonymous";
+  v.innerHTML = `<source src="${VIDEO}" type="video/mp4"><track kind="captions" srclang="en" label="English" src="${VIDEO.replace(/\.mp4$/, ".vtt")}">`;
   v.load();
 }
 
@@ -193,7 +194,69 @@ async function status() {
   el.textContent = d.all_ok ? `● All ${d.services.length} services operational` : bad ? `● ${bad} of ${d.services.length} failing` : "checking…";
 }
 
+function sowViewer() {
+  const sheets = [...document.querySelectorAll(".sheet")], n = sheets.length;
+  const dots = $("#sow-dots"), toc = [...document.querySelectorAll("#sow-toc li")];
+  dots.innerHTML = sheets.map((_, i) => `<i data-i="${i}" title="Page ${i + 1}"></i>`).join("");
+  let cur = 0;
+  const show = (i) => {
+    cur = Math.max(0, Math.min(n - 1, i));
+    sheets.forEach((el, k) => {
+      el.className = "sheet " + (k < cur ? "gone" : k === cur ? "on" : "next" + Math.min(3, k - cur));
+    });
+    [...dots.children].forEach((d, k) => d.classList.toggle("on", k === cur));
+    toc.forEach((li) => li.classList.toggle("on", Number(li.dataset.p) === cur + 1));
+    $("#sow-pno").textContent = `${cur + 1} / ${n}`;
+    $("#sow-prev").disabled = cur === 0; $("#sow-next").disabled = cur === n - 1;
+  };
+  const lightbox = () => {
+    const lb = document.createElement("div");
+    lb.className = "lightbox";
+    lb.innerHTML = `<img alt=""><div class="lb-nav"><button aria-label="Previous">‹</button><button aria-label="Close">✕</button><button aria-label="Next">›</button></div>`;
+    const img = lb.querySelector("img"), [p, x, nx] = lb.querySelectorAll("button");
+    const paint = () => { img.src = sheets[cur].src; img.alt = sheets[cur].alt; };
+    const close = () => { lb.remove(); document.removeEventListener("keydown", key); };
+    const key = (e) => { if (e.key === "Escape") close(); if (e.key === "ArrowRight") { show(cur + 1); paint(); } if (e.key === "ArrowLeft") { show(cur - 1); paint(); } };
+    p.onclick = () => { show(cur - 1); paint(); }; nx.onclick = () => { show(cur + 1); paint(); };
+    x.onclick = close; img.onclick = close; lb.onclick = (e) => { if (e.target === lb) close(); };
+    document.addEventListener("keydown", key);
+    paint(); document.body.appendChild(lb); x.focus();
+  };
+  $("#sow-prev").onclick = () => show(cur - 1);
+  $("#sow-next").onclick = () => show(cur + 1);
+  $("#sow-zoom").onclick = lightbox;
+  dots.onclick = (e) => { if (e.target.dataset.i) show(Number(e.target.dataset.i)); };
+  toc.forEach((li) => (li.onclick = () => show(Number(li.dataset.p) - 1)));
+  sheets.forEach((el) => (el.onclick = () => (el.classList.contains("on") ? lightbox() : show(sheets.indexOf(el)))));
+  $("#sow-viewer").addEventListener("keydown", (e) => { if (e.key === "ArrowRight") show(cur + 1); if (e.key === "ArrowLeft") show(cur - 1); });
+  let x0 = null;
+  $("#sheets").addEventListener("touchstart", (e) => (x0 = e.touches[0].clientX), { passive: true });
+  $("#sheets").addEventListener("touchend", (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) show(cur + (dx < 0 ? 1 : -1)); x0 = null; });
+  show(0);
+}
+
+const LANG_COLORS = { Python: "#3572A5", JavaScript: "#f1e05a", HTML: "#e34c26", CSS: "#563d7c", Shell: "#89e051", "Open Policy Agent": "#7d9199", Dockerfile: "#384d54", Makefile: "#427819" };
+
+async function repo() {
+  let r;
+  try { r = await fetch("/api/repo").then((x) => x.json()); } catch { return; }
+  if (!r || r.error) return;
+  if (r.description) $("#repo-desc").textContent = r.description;
+  $("#repo-topics").innerHTML = (r.topics || []).map((t) => `<span>${esc(t)}</span>`).join("");
+  $("#repo-tree").innerHTML = (r.tree || []).map((f) => `<li class="${f.dir ? "dir" : ""}">${esc(f.name)}</li>`).join("");
+  $("#repo-commits").innerHTML = (r.commits || []).map((c) =>
+    `<li><code>${esc(c.sha)}</code><span class="msg">${esc(c.message)}</span><span class="when">${esc(ago(c.at, Date.now() / 1000))}</span></li>`).join("");
+  const ci = $("#repo-ci");
+  if (r.ci) { ci.textContent = r.ci.ok ? "✓ CI passing" : r.ci.status === "completed" ? "✕ CI failing" : "● CI running"; ci.className = "ci " + (r.ci.ok ? "ok" : r.ci.status === "completed" ? "bad" : ""); }
+  const total = Object.values(r.languages || {}).reduce((a, b) => a + b, 0) || 1;
+  const langs = Object.entries(r.languages || {}).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  $("#repo-langbar").innerHTML = langs.map(([l, n]) => `<i style="width:${(100 * n) / total}%;background:${LANG_COLORS[l] || "#8b949e"}"></i>`).join("");
+  $("#repo-langs").textContent = langs.slice(0, 3).map(([l, n]) => `${l} ${Math.round((100 * n) / total)}%`).join(" · ") + (r.commit_count ? ` · ${r.commit_count} commits` : "");
+}
+
 renderScenarios();
+sowViewer();
+repo();
 status();
 setInterval(status, 15000);
 $("#ask").addEventListener("submit", ask);

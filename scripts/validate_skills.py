@@ -44,6 +44,8 @@ def check(meta: dict) -> list[str]:
             errs.append(f"preflight[{i}] needs name and description")
         elif p.get("required") and "default" in p:
             errs.append(f"preflight {p['name']!r} is required, so it cannot have a default")
+        elif "from_request" in p and not isinstance(p["from_request"], bool):
+            errs.append(f"preflight {p['name']!r}: from_request must be true or false")
     sec = sections(meta["body"])
     for s in ("workflow", "errors"):
         if s not in sec:

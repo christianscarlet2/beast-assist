@@ -289,6 +289,48 @@ async def health():
     return dict(await asyncio.gather(*checks))
 
 
+# ---- the GitHub repository card (cached: unauthenticated GitHub API allows 60 calls an hour) --------------
+REPO = os.environ.get("GITHUB_REPO", "christianscarlet2/beast-assist")
+_repo: dict = {}
+
+
+@app.get("/api/repo")
+async def repo():
+    if _repo.get("_at", 0) > time.time() - 600:
+        return {k: v for k, v in _repo.items() if not k.startswith("_")}
+    gh, hdr = f"https://api.github.com/repos/{REPO}", {"Accept": "application/vnd.github+json"}
+    try:
+        meta, commits, runs, langs, tree = await asyncio.gather(
+            http.get(gh, headers=hdr, timeout=10), http.get(f"{gh}/commits", params={"per_page": 5}, headers=hdr, timeout=10),
+            http.get(f"{gh}/actions/runs", params={"per_page": 1, "branch": "main"}, headers=hdr, timeout=10),
+            http.get(f"{gh}/languages", headers=hdr, timeout=10), http.get(f"{gh}/contents", headers=hdr, timeout=10))
+        m = meta.json()
+        run = (runs.json().get("workflow_runs") or [{}])[0]
+        link = commits.headers.get("link", "")
+        out = {
+            "description": m.get("description"), "topics": m.get("topics", []), "pushed_at": m.get("pushed_at"),
+            "languages": langs.json() if langs.status_code == 200 else {},
+            "commits": [{"sha": c["sha"][:7], "message": c["commit"]["message"].splitlines()[0],
+                         "at": time.mktime(time.strptime(c["commit"]["author"]["date"], "%Y-%m-%dT%H:%M:%SZ")) - time.timezone}
+                        for c in commits.json()][:5] if commits.status_code == 200 else [],
+            "ci": {"status": run.get("status"), "ok": run.get("conclusion") == "success", "url": run.get("html_url")} if run else None,
+            "tree": sorted(({"name": f["name"], "dir": f["type"] == "dir"} for f in tree.json()), key=lambda f: (not f["dir"], f["name"]))
+                    if tree.status_code == 200 else [],
+        }
+        import re as _re
+        last = _re.search(r'page=(\d+)>; rel="last"', link)
+        out["commit_count"] = None
+        if last:
+            per = await http.get(f"{gh}/commits", params={"per_page": 1}, headers=hdr, timeout=10)
+            lp = _re.search(r'page=(\d+)>; rel="last"', per.headers.get("link", ""))
+            out["commit_count"] = int(lp.group(1)) if lp else None
+    except Exception as e:  # noqa: BLE001 - the card falls back to its static text
+        return {"error": e.__class__.__name__}
+    _repo.clear()
+    _repo.update(out, _at=time.time())
+    return out
+
+
 @app.get("/api/config.js")
 async def config_js():
     from fastapi.responses import Response

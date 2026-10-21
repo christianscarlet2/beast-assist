@@ -1,5 +1,17 @@
 # Architecture
 
+## Live deployment (Azure + AWS, since 2026-10-21)
+
+What runs where today, behind https://cognizant.scarletbeast.com. Drawn by `docs/diagrams/live_svg.py`
+(laid out by hand so no edge implies a hop that does not exist).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/live-dark.svg">
+  <img alt="Beast Assist live deployment: browser to beast-demo on Azure Container Apps; Entra ID token; API Management; the MCP servers ask OPA, which loads policy and skills from the registry on Azure Database for PostgreSQL; the agent's model on Amazon Bedrock; the tools wrap the agile board and Scarlet College" src="diagrams/live-light.svg">
+</picture>
+
+## Reference topology (Kubernetes manifests in deploy/k8s)
+
 ```mermaid
 flowchart LR
   user([User]) --> agent
@@ -32,8 +44,8 @@ flowchart LR
    question instead of a guess.
 2. It gets an access token for its own app registration (client credentials) and opens MCP sessions
    only to the servers named in the skill's `allowed_tools`, sending `Authorization` and `X-Skill-Id`.
-3. APIM rejects the request unless the token is a valid Entra v2 token for `api://beast-assist` with a
-   Tools role, and requires the skill header (Consumption allows no per-app rate limit).
+3. APIM rejects the request unless the token is a valid Entra v2 token whose audience is the
+   `beast-assist-api` app id, with a Tools role, and requires the skill header (Consumption allows no per-app rate limit).
 4. The MCP server validates the token again (signature against the tenant JWKS, issuer, audience,
    expiry). Defence in depth: a request that bypasses APIM inside the cluster still needs a real token.
 5. `tools/list` is filtered to the skill's tools on this server, so the model never sees the rest.

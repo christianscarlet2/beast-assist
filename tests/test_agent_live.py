@@ -32,3 +32,11 @@ async def test_tutor_retrieves_from_the_college():
                                       "inputs": {"question": "FastAPI dependency overrides"}})
     assert out["skill"]["name"] == "college-tutor"
     assert "FastAPI" in str([m.content for m in out["messages"] if m.type == "tool"])
+
+
+async def test_tutor_takes_the_question_from_the_request():
+    """college-tutor's required `question` is from_request: asking IS supplying it, so no follow-up question."""
+    model = ScriptedModel(steps=[{"tool": "search_lessons", "args": {"query": "JWT audience", "k": 3}}, {"say": "answer"}])
+    out = await build(model).ainvoke({"request": "What is a JWT audience claim?", "inputs": {"skill": "college-tutor"}})
+    assert out["inputs"]["question"] == "What is a JWT audience claim?"
+    assert not out.get("missing") and out["tool_calls"]

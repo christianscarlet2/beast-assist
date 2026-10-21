@@ -14,7 +14,7 @@
     <a class="brand" href="#"><span class="mark">BA</span> Beast Assist</a>
     <nav>
       <a href="#status">Status</a><a href="#video">Video</a><a href="#console">Live console</a><a href="#agent">Agent</a>
-      <a href="#where">Where it runs</a><a href="#built">What was built</a><a href="#code">Code</a>
+      <a href="#where">Where it runs</a><a href="#sow">Scope of work</a><a href="#built">What was built</a><a href="#code">Code</a>
     </nav>
   </div>
 </header>
@@ -30,9 +30,24 @@
   <div class="pills" id="pills">
     <span class="pill wait">Checking the live stack…</span>
   </div>
-  <p class="by">Built by <strong>Bryan Ruiz</strong> ·
-    <a href="https://www.linkedin.com/in/scarletbeast" rel="noopener">LinkedIn</a> ·
-    <a href="https://github.com/christianscarlet2/beast-assist" rel="noopener">GitHub repository</a></p>
+  <p class="by">Built by <strong>Bryan Ruiz</strong></p>
+  <a class="repo" id="repo" href="https://github.com/christianscarlet2/beast-assist" rel="noopener">
+    <div class="repo-head">
+      <svg class="gh" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      <div class="repo-title"><span class="owner">christianscarlet2 /</span> <b>beast-assist</b> <span class="vis">Public</span></div>
+      <span class="ci" id="repo-ci">CI</span>
+    </div>
+    <p class="repo-desc" id="repo-desc">Governed MCP tools and skills for AI agents: FastAPI MCP servers, SKILL.md registry, OPA, Entra ID + Azure APIM, LangGraph on Bedrock, pgvector RAG, Kubernetes</p>
+    <div class="repo-topics" id="repo-topics"></div>
+    <div class="repo-body">
+      <ul class="repo-tree" id="repo-tree"></ul>
+      <div class="repo-commits">
+        <div class="repo-label">Latest commits</div>
+        <ul id="repo-commits"><li class="muted">Loading from GitHub…</li></ul>
+      </div>
+    </div>
+    <div class="repo-foot"><span class="langbar" id="repo-langbar"></span><span id="repo-langs"></span><span class="open">Open on GitHub →</span></div>
+  </a>
 </section>
 
 <section id="status" class="wrap status-sec">
@@ -51,7 +66,7 @@
 <section id="video" class="band">
   <div class="wrap">
     <h2>The walkthrough</h2>
-    <p class="sub">Every component, how it is wired, and how it was tested. About fifteen minutes, two narrators.</p>
+    <p class="sub">Every component, how it is wired, and how it was tested. About nine minutes, two narrators.</p>
     <div class="video">
       <video id="film" controls preload="metadata" playsinline poster="">
         Your browser cannot play this video.
@@ -111,6 +126,15 @@
       <dl id="where-hops"><dt>Loading</dt><dd>…</dd></dl>
     </div>
   </div>
+  <figure class="card diagram">
+    <h3>Architecture, as deployed</h3>
+    <a href="/static/architecture.svg" target="_blank" rel="noopener" title="Open the diagram full size">
+      <img src="/static/architecture.svg" alt="Architecture diagram: the browser reaches beast-demo in Azure Container Apps, which gets an Entra ID token, calls Azure API Management, which forwards to beast-agile-mcp and beast-college-mcp; both ask beast-opa, which loads policy and skills from beast-registry on Azure Database for PostgreSQL; the agent's model runs on Amazon Bedrock; a daily job indexes Scarlet College into pgvector." loading="lazy">
+    </a>
+    <figcaption>The live deployment diagram from
+      <a href="https://github.com/christianscarlet2/beast-assist/blob/main/docs/architecture.md" rel="noopener">docs/architecture.md</a>
+      on GitHub (source: <code>docs/diagrams/live.mmd</code>). Select it to open full size.</figcaption>
+  </figure>
   <div class="card map">
     <h3>The path of one tool call</h3>
     <ol class="path">
@@ -128,6 +152,42 @@
       Jira and Confluence play for SmartAssist: systems of record behind the MCP servers, reached over HTTPS.
       The platform itself (the MCP servers, policy, registry, database, gateway, identity, agent, and this page) runs in
       Azure, and the model runs in AWS.</p>
+  </div>
+</section>
+
+<section id="sow" class="wrap sow">
+  <div class="sow-grid">
+    <div class="sow-copy">
+      <p class="eyebrow">Proposal · 4 pages</p>
+      <h2>Scope of Work</h2>
+      <p class="sub">How this work would be delivered for SmartAssist: objectives, what is in and out of scope, nine
+        deliverables with acceptance criteria, a phased timeline, assumptions, and roles.</p>
+      <ol class="sow-toc" id="sow-toc">
+        <li data-p="1"><span>1–3</span>Purpose, background, objectives</li>
+        <li data-p="2"><span>4–6</span>Scope, out of scope, deliverables D1–D4</li>
+        <li data-p="3"><span>6–10</span>Deliverables D5–D9, timeline, acceptance, assumptions</li>
+        <li data-p="4"><span>10–12</span>Roles, change control, commercial terms</li>
+      </ol>
+      <div class="sow-actions">
+        <a class="btn" href="/static/Beast-Assist-Scope-of-Work.pdf" download>Download PDF</a>
+        <a class="btn ghost" href="/static/Beast-Assist-Scope-of-Work.pdf" target="_blank" rel="noopener">Open in a new tab</a>
+      </div>
+    </div>
+    <div class="sow-viewer" id="sow-viewer" tabindex="0" aria-label="Scope of Work, page viewer. Use the arrow keys to turn pages.">
+      <div class="sheets" id="sheets">
+        <img class="sheet s1" src="/static/sow/page-1.webp" alt="Scope of Work, page 1" width="1020" height="1320">
+        <img class="sheet s2" src="/static/sow/page-2.webp" alt="Scope of Work, page 2" width="1020" height="1320" loading="lazy">
+        <img class="sheet s3" src="/static/sow/page-3.webp" alt="Scope of Work, page 3" width="1020" height="1320" loading="lazy">
+        <img class="sheet s4" src="/static/sow/page-4.webp" alt="Scope of Work, page 4" width="1020" height="1320" loading="lazy">
+      </div>
+      <div class="pager">
+        <button type="button" id="sow-prev" aria-label="Previous page">‹</button>
+        <span class="dots" id="sow-dots"></span>
+        <span class="pno" id="sow-pno">1 / 4</span>
+        <button type="button" id="sow-next" aria-label="Next page">›</button>
+        <button type="button" id="sow-zoom" class="zoom" aria-label="Full screen">⤢</button>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -168,6 +228,7 @@
     <a class="big" href="https://github.com/christianscarlet2/beast-assist" rel="noopener"><b>github.com/christianscarlet2/beast-assist</b><span>Source, README with install steps and every design decision</span></a>
     <a class="big" href="https://github.com/christianscarlet2/beast-assist/actions" rel="noopener"><b>CI runs</b><span>Tests, skill gates, policy tests, manifests, image</span></a>
     <a class="big" href="https://github.com/christianscarlet2/beast-assist/pkgs/container/beast-assist" rel="noopener"><b>Container image</b><span>ghcr.io/christianscarlet2/beast-assist, the image running here</span></a>
+    <a class="big" href="/static/Beast-Assist-Scope-of-Work.pdf" target="_blank" rel="noopener"><b>Scope of Work (PDF)</b><span>Objectives, deliverables, acceptance criteria, timeline</span></a>
     <a class="big" href="https://github.com/christianscarlet2/beast-assist/blob/main/rag/README.md" rel="noopener"><b>RAG walkthrough</b><span>Ingest, chunk, embed, store, retrieve, generate, evaluate</span></a>
   </div>
 </section>

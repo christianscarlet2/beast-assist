@@ -8,13 +8,13 @@
   skill: board-standup
   server: agile-mcp
   tool: list_tasks
-  args: {project: SB, status: "todo,in_progress"}
+  args: {project: BA, status: "todo,in_progress"}
   expect: {type: list, item_keys: [key, title, status]}
 - name: unknown task is a clean not_found
   skill: board-standup
   server: agile-mcp
   tool: get_task
-  args: {key: SB-999999}
+  args: {key: BA-999999}
   expect: {error_contains: not_found}
 - name: bad key is rejected before the backend
   skill: board-standup

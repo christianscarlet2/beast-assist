@@ -49,6 +49,7 @@ class Preflight(BaseModel):
     description: str
     required: bool = False
     default: str | None = None
+    from_request: bool = False  # fill from the user's request when missing (a tutor's question)
 
 
 class SkillDoc(BaseModel):

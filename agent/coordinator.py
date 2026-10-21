@@ -73,7 +73,9 @@ def build(model, token: str | None = None):
         missing = []
         for p in s["skill"].get("preflight", []):
             if p["name"] not in inputs:
-                if p.get("default") is not None:
+                if p.get("from_request") and s["request"].strip():
+                    inputs[p["name"]] = s["request"].strip()  # the request itself is the input (a tutor's question)
+                elif p.get("default") is not None:
                     inputs[p["name"]] = p["default"]
                 elif p.get("required"):
                     missing.append(p)
