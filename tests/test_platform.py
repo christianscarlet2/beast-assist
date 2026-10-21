@@ -1,13 +1,22 @@
 """The platform's guarantees, end to end over MCP HTTP: auth, skill scope, write gating, lifecycle,
 tools/list filtering, error mapping, health."""
+import importlib.util
+from pathlib import Path
+
 import httpx
 import pytest
 
 from conftest import make_token, mcp_call
 
 
-class FakeAgile:
+_spec = importlib.util.spec_from_file_location("agile_backend_for_fake", Path(__file__).parents[1] / "servers/agile-mcp/src/backend.py")
+_agile = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_agile)
+
+
+class FakeAgile(_agile.ProjectScope):
     def __init__(self):
+        super().__init__()
         self.calls = []
 
     async def call(self, method, path, body=None, params=None):

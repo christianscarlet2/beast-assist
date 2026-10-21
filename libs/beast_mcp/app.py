@@ -11,6 +11,7 @@ tools/list is filtered to the skill's allowed tools, so an agent never sees what
 import functools
 import inspect
 import os
+import socket
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -48,6 +49,16 @@ def _wrap(spec):
         except ToolFailure as e:
             raise ToolError(e.text()) from None
     return run
+
+
+def served_by_header() -> str:
+    """Which replica answered: the Azure Container Apps app/replica names when there, else the hostname.
+    Lets a caller see, per response, where the MCP server actually ran."""
+    app_name = os.environ.get("CONTAINER_APP_NAME")
+    if app_name:
+        return f"azure-container-apps/{os.environ.get('AZURE_REGION', '')}/{app_name}/" \
+               f"{os.environ.get('CONTAINER_APP_REPLICA_NAME', '')}"
+    return f"host/{socket.gethostname()}"
 
 
 def create_app(server_root: str | Path, name: str, instructions: str = "") -> FastAPI:
@@ -132,6 +143,13 @@ def create_app(server_root: str | Path, name: str, instructions: str = "") -> Fa
     app = FastAPI(title=name, lifespan=lifespan, docs_url=None, redoc_url=None)
     app.state.tools = specs
     app.state.settings = settings
+    served_by = served_by_header()
+
+    @app.middleware("http")
+    async def stamp(request, call_next):
+        response = await call_next(request)
+        response.headers["X-Served-By"] = served_by
+        return response
 
     @app.get("/healthz")
     async def healthz():

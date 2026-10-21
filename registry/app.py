@@ -5,6 +5,7 @@
     GET  /resolve?q=                pick a skill from a user's words (alias, then name, then description)
     PUT  /skills/{name}             publish (Entra token with the Skills.Publish role); a version is immutable
     GET  /bundles/beast.tar.gz      OPA bundle: data.beast.skills = {name: {allowed_tools, lifecycle}}
+                                    (+ the Rego policy itself when BUNDLE_POLICY is set)
     GET  /healthz, /readyz
 """
 import hashlib
@@ -161,13 +162,19 @@ async def bundle(if_none_match: str | None = Header(None)):
         rows = await (await con.execute("SELECT name, lifecycle, allowed_tools FROM skills ORDER BY name")).fetchall()
     data = {"skills": {r["name"]: {"lifecycle": r["lifecycle"], "allowed_tools": r["allowed_tools"]} for r in rows}}
     raw = json.dumps(data, sort_keys=True).encode()
-    etag = hashlib.sha256(raw).hexdigest()[:32]
+    # BUNDLE_POLICY=policy/tools.rego ships the Rego in the bundle too, so a cloud OPA needs only this URL
+    # (no mounted files). Off locally, where docker compose mounts ./policy into OPA instead.
+    rego = Path(os.environ["BUNDLE_POLICY"]).read_bytes() if os.environ.get("BUNDLE_POLICY") else b""
+    etag = hashlib.sha256(raw + rego).hexdigest()[:32]
     if if_none_match and if_none_match.strip('"') == etag:
         return Response(status_code=304)
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        for path, content in (("/beast/data.json", raw),
-                              ("/.manifest", json.dumps({"revision": etag, "roots": ["beast/skills"]}).encode())):
+        roots = ["beast/skills", "beast/tools"] if rego else ["beast/skills"]
+        files = [("/beast/data.json", raw), ("/.manifest", json.dumps({"revision": etag, "roots": roots}).encode())]
+        if rego:
+            files.append(("/beast/tools/tools.rego", rego))
+        for path, content in files:
             info = tarfile.TarInfo(path.lstrip("/"))
             info.size = len(content)
             tar.addfile(info, io.BytesIO(content))

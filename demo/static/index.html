@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beast Assist · Live MCP Platform</title>
+<meta name="description" content="Governed MCP tools and skills for AI agents, running live on Azure and AWS. Built by Bryan Ruiz.">
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-row">
+    <a class="brand" href="#"><span class="mark">BA</span> Beast Assist</a>
+    <nav>
+      <a href="#status">Status</a><a href="#video">Video</a><a href="#console">Live console</a><a href="#agent">Agent</a>
+      <a href="#where">Where it runs</a><a href="#built">What was built</a><a href="#code">Code</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="hero wrap">
+  <p class="eyebrow">MCP Tool &amp; Skill Developer · working example</p>
+  <h1>Governed MCP tools and skills for AI agents, running live on Azure and AWS.</h1>
+  <p class="lede">Beast Assist is a small version of an enterprise agent platform: MCP servers in Python and
+    FastAPI, SKILL.md skills with a registry, OPA authorization, Entra ID tokens through Azure API Management,
+    a LangGraph coordinator on Amazon Bedrock, and RAG on PostgreSQL + pgvector. Everything on this page is
+    live: the buttons below make real calls through every one of those layers.</p>
+  <div class="pills" id="pills">
+    <span class="pill wait">Checking the live stack…</span>
+  </div>
+  <p class="by">Built by <strong>Bryan Ruiz</strong> ·
+    <a href="https://www.linkedin.com/in/scarletbeast" rel="noopener">LinkedIn</a> ·
+    <a href="https://github.com/christianscarlet2/beast-assist" rel="noopener">GitHub repository</a></p>
+</section>
+
+<section id="status" class="wrap status-sec">
+  <div class="status-head">
+    <h2>Live status</h2>
+    <span class="status-all" id="status-all">checking…</span>
+  </div>
+  <p class="sub">Every service this platform runs on, checked by the app serving this page: Azure every minute,
+    Bedrock every five minutes (each Bedrock check is a real model call). Each light shows its last check underneath.</p>
+  <div class="cloud-label az">Microsoft Azure</div>
+  <div class="lights" id="lights-azure"></div>
+  <div class="cloud-label aws">Amazon Web Services</div>
+  <div class="lights" id="lights-aws"></div>
+</section>
+
+<section id="video" class="band">
+  <div class="wrap">
+    <h2>The walkthrough</h2>
+    <p class="sub">Every component, how it is wired, and how it was tested. About fifteen minutes, two narrators.</p>
+    <div class="video">
+      <video id="film" controls preload="metadata" playsinline poster="">
+        Your browser cannot play this video.
+      </video>
+    </div>
+    <p class="note">Narration uses Piper text-to-speech voices (synthetic, AI-generated audio). Captions are available in the player.</p>
+  </div>
+</section>
+
+<section id="console" class="wrap">
+  <h2>Live console</h2>
+  <p class="sub">Each button sends one real MCP call. This page asks its own backend (an Azure Container App) to
+    get an Entra ID token and call Azure API Management, which forwards to the MCP server, which asks OPA. The
+    trace shows every hop, the exact JSON-RPC sent, and who answered.</p>
+  <div class="console">
+    <div class="scenarios" id="scenarios"></div>
+    <div class="trace" id="trace">
+      <div class="empty">Pick a scenario on the left. Green ones should succeed; red ones should be refused, and the trace shows which layer refused them.</div>
+    </div>
+  </div>
+</section>
+
+<section id="agent" class="band">
+  <div class="wrap">
+    <h2>Ask the agent</h2>
+    <p class="sub">The LangGraph coordinator from the repo, running in Azure, with its model on Amazon Bedrock. It
+      resolves a skill from the registry, loads only that skill's tools over MCP, and follows the skill's
+      workflow. Its token is read-only, so write tools are refused. Limited to a few questions an hour.</p>
+    <form class="ask" id="ask">
+      <select id="ask-skill" aria-label="Skill">
+        <option value="">Let the registry pick the skill</option>
+        <option value="board-standup">board-standup (agile-mcp)</option>
+        <option value="college-tutor">college-tutor (college-mcp)</option>
+      </select>
+      <input id="ask-q" maxlength="300" required placeholder="Give me a standup for the BA project" value="Give me a standup for the BA project">
+      <button type="submit">Ask</button>
+    </form>
+    <div class="examples">Try:
+      <button type="button" data-q="Give me a standup for the BA project" data-s="board-standup">a standup</button>
+      <button type="button" data-q="How do I override a FastAPI dependency in a test?" data-s="college-tutor">a tutor question</button>
+      <button type="button" data-q="What is a JWT audience claim and why does it matter?" data-s="college-tutor">auth</button>
+    </div>
+    <div id="agent-out" class="agent-out"></div>
+  </div>
+</section>
+
+<section id="where" class="wrap">
+  <h2>Where it runs</h2>
+  <p class="sub">Measured live by the app serving this page, not typed in. Refreshes on load.</p>
+  <div class="where-grid">
+    <div class="card">
+      <h3>This page and its backend</h3>
+      <dl id="where-host"><dt>Loading</dt><dd>…</dd></dl>
+    </div>
+    <div class="card">
+      <h3>Each hop, health-checked from Azure</h3>
+      <dl id="where-hops"><dt>Loading</dt><dd>…</dd></dl>
+    </div>
+  </div>
+  <div class="card map">
+    <h3>The path of one tool call</h3>
+    <ol class="path">
+      <li><b>Browser</b><span>you</span></li>
+      <li class="az"><b>demo app</b><span>Azure Container Apps</span></li>
+      <li class="az"><b>Entra ID</b><span>client-credentials token</span></li>
+      <li class="az"><b>API Management</b><span>validate-jwt, skill header</span></li>
+      <li class="az"><b>MCP server</b><span>Azure Container Apps</span></li>
+      <li class="az"><b>OPA</b><span>skill allowed_tools</span></li>
+      <li class="az"><b>Registry + pgvector</b><span>Azure Database for PostgreSQL</span></li>
+      <li class="aws"><b>Model</b><span>Amazon Bedrock</span></li>
+    </ol>
+    <p class="fine">What is <em>not</em> in the cloud: the two systems the tools wrap, the Scarlet Beast agile board
+      and Scarlet College, which are existing Scarlet Beast web apps on their own server. They play the part
+      Jira and Confluence play for SmartAssist: systems of record behind the MCP servers, reached over HTTPS.
+      The platform itself (the MCP servers, policy, registry, database, gateway, identity, agent, and this page) runs in
+      Azure, and the model runs in AWS.</p>
+  </div>
+</section>
+
+<section id="built" class="band">
+  <div class="wrap">
+    <h2>What was built, against the job description</h2>
+    <div class="table">
+      <table>
+        <thead><tr><th>The role asks for</th><th>Beast Assist has</th></tr></thead>
+        <tbody>
+          <tr><td>MCP servers in Python/FastAPI, one backend each, tools auto-discovered</td><td><code>agile-mcp</code> and <code>college-mcp</code> on the MCP Python SDK 2.2, generated from <code>mcp-template/</code>; tools are files in <code>src/tools/</code> found at startup</td></tr>
+          <tr><td>Tool design for LLMs</td><td><code>bootstrap_guide</code> first, slim rows, input checked before the backend, errors as <code>code: message. Next: hint</code></td></tr>
+          <tr><td>SKILL.md: allowed_tools, inputs, lifecycle, workflow</td><td>3 skills (<code>board-standup</code>, <code>college-tutor</code>, <code>study-plan-from-job</code>) with validate, audit and upload scripts</td></tr>
+          <tr><td>Skills Registry on PostgreSQL</td><td>FastAPI registry: list, resolve by alias, publish behind the <code>Skills.Publish</code> role; serves the OPA bundle</td></tr>
+          <tr><td>Authorization with OPA</td><td>Rego: a skill may call only its <code>allowed_tools</code>, its lifecycle must fit the environment, writes need <code>Tools.Write</code>; 6 policy tests</td></tr>
+          <tr><td>Entra ID, Azure API Management</td><td>4 app registrations with app roles; APIM Consumption with <code>validate-jwt</code> and a required skill header; servers verify the token again</td></tr>
+          <tr><td>LangGraph, Bedrock</td><td>Coordinator graph: resolve skill → preflight → specialist ReAct agent with only that skill's tools; Bedrock Converse</td></tr>
+          <tr><td>RAG</td><td>Scarlet College lessons chunked by heading, embedded (bge-small or Titan V2), pgvector HNSW, cited answers; hit@k and MRR eval</td></tr>
+          <tr><td>Docker, Kubernetes, certificates, health</td><td>One image; Kustomize dev/prod overlays with HPA, PDB, NetworkPolicy, cert-manager; <code>/healthz</code> and <code>/readyz</code> everywhere</td></tr>
+          <tr><td>Evaluation, observability, CI</td><td>13 benchmark scenarios; OpenTelemetry traces and one log line per tool call; GitHub Actions test, lint, image</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3 class="mt">Verified</h3>
+    <ul class="checks">
+      <li><b>32</b> unit tests (servers over real MCP HTTP), <b>3</b> agent integration tests</li>
+      <li><b>6/6</b> Rego policy tests; <b>3/3</b> skills valid; audit passes</li>
+      <li><b>13/13</b> benchmark scenarios locally and through Azure API Management with real Entra tokens</li>
+      <li>RAG retrieval: bge-small hit@1 1.00, MRR 1.00; Titan V2 hit@1 0.88, MRR 0.92 (8 questions)</li>
+      <li>Kubernetes overlays pass kubeconform; CI green on GitHub</li>
+    </ul>
+  </div>
+</section>
+
+<section id="code" class="wrap">
+  <h2>Code</h2>
+  <div class="links">
+    <a class="big" href="https://github.com/christianscarlet2/beast-assist" rel="noopener"><b>github.com/christianscarlet2/beast-assist</b><span>Source, README with install steps and every design decision</span></a>
+    <a class="big" href="https://github.com/christianscarlet2/beast-assist/actions" rel="noopener"><b>CI runs</b><span>Tests, skill gates, policy tests, manifests, image</span></a>
+    <a class="big" href="https://github.com/christianscarlet2/beast-assist/pkgs/container/beast-assist" rel="noopener"><b>Container image</b><span>ghcr.io/christianscarlet2/beast-assist, the image running here</span></a>
+    <a class="big" href="https://github.com/christianscarlet2/beast-assist/blob/main/rag/README.md" rel="noopener"><b>RAG walkthrough</b><span>Ingest, chunk, embed, store, retrieve, generate, evaluate</span></a>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">Beast Assist · Bryan Ruiz · Scarlet Beast · This page is served from Azure Container Apps.
+    The narration is synthetic (Piper text-to-speech).</div>
+</footer>
+<script src="/api/config.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

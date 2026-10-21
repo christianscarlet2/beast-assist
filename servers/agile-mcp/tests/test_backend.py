@@ -39,3 +39,15 @@ async def test_sends_token_and_actor():
                          transport=httpx.MockTransport(handler))
     await b.call("GET", "/projects")
     assert seen["authorization"] == "Bearer secret-token" and seen["x-agile-actor"] == "Beast Assist (MCP)"
+
+
+def test_project_scope():
+    b = mod.AgileBackend("https://board.test/api/agile", "t", "test", projects=["ba"])
+    assert b.project() == "BA" and b.project("ba") == "BA" and b.task_key("ba-7") == "BA-7"
+    for bad in (lambda: b.project("SB"), lambda: b.task_key("SB-12")):
+        with pytest.raises(ToolFailure) as e:
+            bad()
+        assert e.value.code == "forbidden"
+    assert b.visible([{"key": "SB"}, {"key": "BA"}]) == [{"key": "BA"}]
+    unscoped = mod.AgileBackend("https://board.test/api/agile", "t", "test")
+    assert unscoped.project() == "SB" and unscoped.project("STEW") == "STEW"

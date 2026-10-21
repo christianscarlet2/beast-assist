@@ -6,8 +6,38 @@ import httpx
 from beast_mcp import ToolFailure
 
 
-class AgileBackend:
-    def __init__(self, base: str, token: str, actor: str, transport: httpx.AsyncBaseTransport | None = None):
+class ProjectScope:
+    """projects: when set, the only project keys this server may touch (AGILE_PROJECTS=BA). A public demo
+    runs scoped to its own project, so the rest of the board stays invisible even to a valid token."""
+
+    def __init__(self, projects: list[str] | None = None, default_project: str = ""):
+        self.projects = [p.upper() for p in projects] if projects else None
+        self.default_project = (default_project or (self.projects[0] if self.projects else "SB")).upper()
+
+    def project(self, key: str = "") -> str:
+        """The project a tool acts on: the one asked for, else the default; refused outside the scope."""
+        key = (key or self.default_project).upper()
+        if self.projects is not None and key not in self.projects:
+            raise ToolFailure(f"project {key} is outside this server's scope", code="forbidden",
+                              hint=f"use one of: {', '.join(self.projects)}")
+        return key
+
+    def task_key(self, key: str) -> str:
+        """Check a task key like BA-7 against the scope; returns it upper-cased."""
+        if "-" not in key:
+            raise ToolFailure(f"{key!r} is not a task key", hint=f"pass a key like {self.default_project}-12",
+                              code="invalid_input")
+        self.project(key.rsplit("-", 1)[0])
+        return key.upper()
+
+    def visible(self, projects: list[dict]) -> list[dict]:
+        return [p for p in projects if self.projects is None or str(p.get("key", "")).upper() in self.projects]
+
+
+class AgileBackend(ProjectScope):
+    def __init__(self, base: str, token: str, actor: str, transport: httpx.AsyncBaseTransport | None = None,
+                 projects: list[str] | None = None, default_project: str = ""):
+        super().__init__(projects, default_project)
         self.http = httpx.AsyncClient(base_url=base.rstrip("/"), timeout=20, transport=transport, headers={
             "Authorization": f"Bearer {token}", "Accept": "application/json", "X-Agile-Actor": actor})
 
@@ -42,5 +72,7 @@ class AgileBackend:
 
 def make_backend() -> AgileBackend:
     token = os.environ.get("AGILE_API_TOKEN", "")
+    scope = [p.strip() for p in os.environ.get("AGILE_PROJECTS", "").split(",") if p.strip()]
     return AgileBackend(os.environ.get("AGILE_API_BASE", "https://living.scarletbeast.com/api/agile"), token,
-                        os.environ.get("AGILE_ACTOR", "Beast Assist (MCP)"))
+                        os.environ.get("AGILE_ACTOR", "Beast Assist (MCP)"), projects=scope or None,
+                        default_project=os.environ.get("AGILE_DEFAULT_PROJECT", ""))

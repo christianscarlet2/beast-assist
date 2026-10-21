@@ -46,6 +46,14 @@ def agent_token() -> str:
     return r.json()["access_token"]
 
 
+def text_of(content) -> str:
+    """A message's visible text. Some Bedrock models (Nova) return a list of blocks, reasoning included;
+    keep only the text blocks."""
+    if isinstance(content, str):
+        return content
+    return "".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text").strip()
+
+
 def build(model, token: str | None = None):
     async def resolve_skill(s: State) -> State:
         async with httpx.AsyncClient(timeout=10) as c:
@@ -94,7 +102,7 @@ def build(model, token: str | None = None):
                                   {"recursion_limit": 40})
         calls = [{"tool": tc["name"], "args": tc["args"]} for m in out["messages"]
                  for tc in (getattr(m, "tool_calls", None) or [])]
-        return {"messages": out["messages"], "tool_calls": calls, "answer": out["messages"][-1].content}
+        return {"messages": out["messages"], "tool_calls": calls, "answer": text_of(out["messages"][-1].content)}
 
     g = StateGraph(State)
     g.add_node("resolve_skill", resolve_skill)
